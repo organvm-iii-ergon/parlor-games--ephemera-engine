@@ -65,8 +65,26 @@ describe('clueDistribution utility', () => {
         { id: 'B', title: 'Clue B', type: 'PHYSICAL', description: 'Desc B', found_by: 'X', tier: 1 },
         { id: 'A', title: 'Clue A', type: 'PHYSICAL', description: 'Desc A', found_by: 'Y', tier: 1 },
       ];
+      const originalIds = sameTierClues.map(c => c.id);
       const sorted = sortByTier(sameTierClues);
       expect(sorted.map(c => c.id)).toEqual(['A', 'B']);
+      expect(sameTierClues.map(c => c.id)).toEqual(originalIds);
+    });
+
+    it('handles empty and single-clue inputs without mutating the clue object', () => {
+      const single: Clue = {
+        id: 'ONLY',
+        title: 'Only clue',
+        type: 'DOCUMENT',
+        description: 'One clue',
+        found_by: 'Host',
+        tier: 2,
+      };
+      const snapshot = { ...single };
+
+      expect(sortByTier([])).toEqual([]);
+      expect(sortByTier([single])).toEqual([single]);
+      expect(single).toEqual(snapshot);
     });
   });
 
@@ -124,6 +142,26 @@ describe('clueDistribution utility', () => {
     it('accelerates distribution for small player count (<= 5)', () => {
       const recommended = recommendDistributionOrder(mockClues, { playerCount: 4 });
       expect(recommended.map(c => c.id)).toEqual(['C1', 'C3', 'C2', 'C4']);
+    });
+
+    it('handles all-same-tier clues deterministically without mutating inputs', () => {
+      const sameTierClues: Clue[] = [
+        { id: 'Z', title: 'Zed', type: 'PHYSICAL', description: 'Z', found_by: 'A', tier: 2 },
+        { id: 'M', title: 'Em', type: 'PHYSICAL', description: 'M', found_by: 'B', tier: 2 },
+        { id: 'A', title: 'Ay', type: 'PHYSICAL', description: 'A', found_by: 'C', tier: 2 },
+      ];
+      const snapshot = sameTierClues.map(clue => ({ ...clue }));
+
+      expect(recommendDistributionOrder(sameTierClues).map(c => c.id)).toEqual(['A', 'M', 'Z']);
+      expect(recommendDistributionOrder(sameTierClues, { pacing: 'fast' }).map(c => c.id)).toEqual(['A', 'M', 'Z']);
+      expect(sameTierClues).toEqual(snapshot);
+    });
+
+    it('handles empty and single-clue inputs safely', () => {
+      const single = mockClues[1];
+      expect(recommendDistributionOrder([])).toEqual([]);
+      expect(recommendDistributionOrder([single])).toEqual([single]);
+      expect(nextClueToDistribute([single], [])).toBe(single);
     });
   });
 
