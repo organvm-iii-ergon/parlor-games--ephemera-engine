@@ -206,7 +206,10 @@ export async function renderPDF(options: RenderOptions): Promise<RenderResult> {
   html = inlineCSS(html);
 
   // Launch Puppeteer
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });

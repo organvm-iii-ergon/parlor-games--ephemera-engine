@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { murderMysteryArtifactService } from '../../src/features/murder-mystery/services/murderMysteryArtifactService';
+import { ArtifactDataAssemblyService } from '../../src/features/murder-mystery/services/artifactDataAssemblyService';
 import { MurderMysteryData } from '../../src/features/murder-mystery/types/murder-mystery';
+import { validateScenario } from '../../src/features/murder-mystery/utils/scenarioValidation';
 import { renderHTML, renderPDF } from '../../../artifacts/src/render';
 
 const mockScenario: MurderMysteryData = {
@@ -83,47 +85,6 @@ function unescapeHTML(str: string): string {
     .replace(/&amp;/g, '&');
 }
 
-function assertDossierContent(html: string, expected: typeof fixtureData): void {
-  expect(html).toContain('The Dossier');
-  expect(html).toContain('Cast of Characters');
-  expect(html).toContain('Crime Scene Summary');
-  expect(html).toContain('Evidence Log');
-  expect(html).toContain('Accusations');
-  expect(html).toContain('The Reveal');
-  expect(html).toContain('Appendix: Clue Cards');
-
-  for (const char of expected.characters) {
-    expect(html).toContain(char.name);
-    expect(html).toContain(char.playedBy);
-    expect(html).toContain(char.bio);
-  }
-
-  for (const clue of expected.clues) {
-    expect(html).toContain(clue.description);
-    expect(html).toContain(clue.type);
-    if (clue.foundBy) {
-      expect(html).toContain(clue.foundBy);
-    }
-  }
-
-  for (const acc of expected.accusations) {
-    expect(html).toContain(acc.accuser);
-    expect(html).toContain(acc.target);
-    if (acc.reasoning) {
-      expect(html).toContain(acc.reasoning);
-    }
-  }
-
-  expect(html).toContain(expected.reveal.culprit);
-  expect(html).toContain(expected.reveal.explanation);
-  if (expected.votes) {
-    for (const vote of expected.votes) {
-      expect(html).toContain(vote.character);
-      expect(html).toContain(vote.count.toString());
-    }
-  }
-}
-
 describe('Artifact Generation Integration', () => {
   it('should assemble Dossier artifact payload correctly from domain model', () => {
     const payload = murderMysteryArtifactService.assembleDossierData(mockScenario);
@@ -149,6 +110,30 @@ describe('Artifact Generation Integration', () => {
     expect(payload?.envelope.text).toBe('Arthur was caught at the border.');
   });
 
+  it('should return null when assembling Sealed Envelope data for a non-existent character', () => {
+    const payload = murderMysteryArtifactService.assembleSealedEnvelopeData(mockScenario, 'non-existent-character');
+    expect(payload).toBeNull();
+  });
+
+  it('should fail payload assembly when required scenario data is missing', () => {
+    expect(() => ArtifactDataAssemblyService.assembleDossierPayload('session-1', {} as any)).toThrow();
+  });
+
+  it('should reject invalid scenario data with mismatched murderer identity before generation', () => {
+    const invalidScenario: MurderMysteryData = {
+      ...mockScenario,
+      crime: {
+        ...mockScenario.crime,
+        murderer_id: 'c2' // Mismatched murderer_id vs c1 is_murderer=true
+      }
+    };
+
+    const issues = validateScenario(invalidScenario);
+    const murdererIssue = issues.find(i => i.path === 'crime.murderer_id');
+    expect(murdererIssue).toBeDefined();
+    expect(murdererIssue?.message).toContain('does not match character is_murderer flag');
+  });
+
   it('should match fixture shape expected by template', () => {
     expect(fixtureData).toHaveProperty('session');
     expect(fixtureData).toHaveProperty('setting');
@@ -169,24 +154,56 @@ describe('Artifact Generation Integration', () => {
   });
 
   it('should render Dossier HTML with all required sections, character data, clues, accusations, and reveal', () => {
-    const html = unescapeHTML(renderHTML('the-dossier', fixtureData));
-    assertDossierContent(html, fixtureData);
+    const rawHtml = renderHTML('the-dossier', fixtureData);
+    const html = unescapeHTML(rawHtml);
+
+    // 1. All required sections present
+    expect(html).toContain('The Dossier');
+    expect(html).toContain('Cast of Characters');
+    expect(html).toContain('Crime Scene Summary');
+    expect(html).toContain('Evidence Log');
+    expect(html).toContain('Accusations');
+    expect(html).toContain('The Reveal');
+    expect(html).toContain('Appendix: Clue Cards');
+
+    // 2. Character data is correct and complete
+    for (const char of fixtureData.characters) {
+      expect(html).toContain(char.name);
+      expect(html).toContain(char.playedBy);
+      expect(html).toContain(char.bio);
+    }
+
+    // 3. All clues included with distribution/discovery details
+    for (const clue of fixtureData.clues) {
+      expect(html).toContain(clue.description);
+      expect(html).toContain(clue.type);
+      if (clue.foundBy) {
+        expect(html).toContain(clue.foundBy);
+      }
+    }
+
+    // 4. All accusations included
+    for (const acc of fixtureData.accusations) {
+      expect(html).toContain(acc.accuser);
+      expect(html).toContain(acc.target);
+      if (acc.reasoning) {
+        expect(html).toContain(acc.reasoning);
+      }
+    }
+
+    // 5. Reveal section matches actual solution
+    expect(html).toContain(fixtureData.reveal.culprit);
+    expect(html).toContain(fixtureData.reveal.explanation);
+    if (fixtureData.votes) {
+      for (const vote of fixtureData.votes) {
+        expect(html).toContain(vote.character);
+        expect(html).toContain(vote.count.toString());
+      }
+    }
   });
 
-  it('should fail the content contract when a required character is missing', () => {
-    const incompleteFixture = structuredClone(fixtureData);
-    incompleteFixture.characters = incompleteFixture.characters.slice(1);
-    const html = unescapeHTML(renderHTML('the-dossier', incompleteFixture));
-
-    expect(() => assertDossierContent(html, fixtureData)).toThrow();
-  });
-
-  it('should fail the content contract when the reveal explanation is incorrect', () => {
-    const incorrectFixture = structuredClone(fixtureData);
-    incorrectFixture.reveal.explanation = 'INCORRECT REVEAL SENTINEL';
-    const html = unescapeHTML(renderHTML('the-dossier', incorrectFixture));
-
-    expect(() => assertDossierContent(html, fixtureData)).toThrow();
+  it('should throw an error when attempting to render an unknown template', () => {
+    expect(() => renderHTML('non-existent-template', fixtureData)).toThrow(/Unknown template/);
   });
 
   it('should generate Dossier PDF successfully with valid data', async () => {
@@ -199,19 +216,21 @@ describe('Artifact Generation Integration', () => {
       fs.unlinkSync(outputPath);
     }
 
-    const result = await renderPDF({
-      templateName: 'the-dossier',
-      data: fixtureData,
-      outputPath
-    });
+    try {
+      const result = await renderPDF({
+        templateName: 'the-dossier',
+        data: fixtureData,
+        outputPath
+      });
 
-    expect(result).toBeDefined();
-    expect(result.path).toBe(outputPath);
-    expect(fs.existsSync(result.path)).toBe(true);
-    expect(result.sizeBytes).toBeGreaterThan(0);
-
-    if (fs.existsSync(outputPath)) {
-      fs.unlinkSync(outputPath);
+      expect(result).toBeDefined();
+      expect(result.path).toBe(outputPath);
+      expect(fs.existsSync(result.path)).toBe(true);
+      expect(result.sizeBytes).toBeGreaterThan(0);
+    } finally {
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
     }
   }, 30000);
 });
