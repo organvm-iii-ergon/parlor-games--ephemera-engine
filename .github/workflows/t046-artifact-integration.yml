@@ -40,6 +40,12 @@ jobs:
         working-directory: artifacts
         run: npm run typecheck
 
+      - name: Enable Chromium user namespaces on hosted runner
+        run: |
+          if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
       - name: Run focused Dossier artifact integration test
         working-directory: app
         env:
