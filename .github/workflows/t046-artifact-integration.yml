@@ -42,6 +42,9 @@ jobs:
 
       - name: Run focused Dossier artifact integration test
         working-directory: app
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: t046-synthetic-anon-key
         run: npm test -- tests/integration/artifactGeneration.test.ts
 
       - name: Verify generated PDF cleanup
