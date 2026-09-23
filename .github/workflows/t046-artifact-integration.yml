@@ -3,6 +3,8 @@ name: T046 artifact integration
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
