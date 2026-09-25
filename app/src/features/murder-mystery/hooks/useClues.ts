@@ -28,12 +28,42 @@ export const useClues = (sessionId: string, initialScenario: MurderMysteryData) 
     return getDistributedClues().some(c => c.clue_id === clueId);
   };
 
+  const getPendingClues = () => {
+    return scenario.clues.filter(c => !isClueDistributed(c.id));
+  };
+
+  const toggleClueDistribution = async (clueId: string, distribute: boolean) => {
+    if (distribute) {
+      await distributeClue(clueId);
+    } else {
+      setIsProcessing(true);
+      setError(null);
+      try {
+        const updatedClues = (scenario.game_night?.clues_distributed || []).filter(c => c.clue_id !== clueId);
+        const updatedScenario: MurderMysteryData = {
+          ...scenario,
+          game_night: {
+            ...scenario.game_night,
+            clues_distributed: updatedClues
+          }
+        };
+        setScenario(updatedScenario);
+      } catch (err: any) {
+        setError(err.message || 'Failed to toggle clue distribution');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
   return {
     scenario,
     isProcessing,
     error,
     distributeClue,
     getDistributedClues,
-    isClueDistributed
+    getPendingClues,
+    isClueDistributed,
+    toggleClueDistribution
   };
 };

@@ -6,7 +6,7 @@ const storage = createMMKV();
 
 export class GameNightService {
   /**
-   * Advances the game to the next Act.
+   * Advances the game to the next Act (or reverts to a previous Act).
    * Uses offline-first writes: saves to MMKV first, then attempts to sync with Supabase.
    */
   static async advanceAct(
@@ -24,11 +24,11 @@ export class GameNightService {
       accusations: []
     };
 
-    // Filter out existing timestamp for this act if any, and add the new one
+    // Filter out acts greater than or equal to newAct to support undo/reverting to earlier acts
     const updatedGameNight: GameNightState = {
       ...currentGameNight,
       act_timestamps: [
-        ...currentGameNight.act_timestamps.filter(a => a.act !== newAct),
+        ...currentGameNight.act_timestamps.filter(a => a.act < newAct),
         actTimestamp
       ]
     };
