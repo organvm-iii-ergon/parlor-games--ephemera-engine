@@ -16,10 +16,11 @@ export const ClueDistributionScreen: React.FC<ClueDistributionScreenProps> = ({
   scenario,
   onBack
 }) => {
-  const { toggleClueDistribution, getDistributedClues, getPendingClues } = useClues(sessionId, scenario);
+  const { toggleClueDistribution, getDistributedClues, getPendingClues, isClueDistributed } = useClues(sessionId, scenario);
   
-  const distributed = getDistributedClues();
+  const distributedClueRecords = getDistributedClues();
   const pending = getPendingClues();
+  const distributed = scenario.clues.filter(c => isClueDistributed(c.id));
 
   return (
     <SafeAreaView style={styles.container}>
@@ -40,9 +41,11 @@ export const ClueDistributionScreen: React.FC<ClueDistributionScreenProps> = ({
           {pending.map((clue) => (
             <ClueChecklistItem
               key={clue.id}
-              clue={clue}
-              isDistributed={false}
-              onToggle={() => toggleClueDistribution(clue.id, true)}
+              clueId={clue.id}
+              title={clue.title || clue.name || 'Clue'}
+              type={clue.type || 'PHYSICAL'}
+              isFound={false}
+              onToggleFound={() => toggleClueDistribution(clue.id, true)}
             />
           ))}
         </View>
@@ -52,14 +55,20 @@ export const ClueDistributionScreen: React.FC<ClueDistributionScreenProps> = ({
           {distributed.length === 0 && (
             <Text style={styles.emptyText}>No clues distributed yet.</Text>
           )}
-          {distributed.map((clue) => (
-            <ClueChecklistItem
-              key={clue.id}
-              clue={clue}
-              isDistributed={true}
-              onToggle={() => toggleClueDistribution(clue.id, false)}
-            />
-          ))}
+          {distributed.map((clue) => {
+            const distRecord = distributedClueRecords.find(d => d.clue_id === clue.id);
+            return (
+              <ClueChecklistItem
+                key={clue.id}
+                clueId={clue.id}
+                title={clue.title || clue.name || 'Clue'}
+                type={clue.type || 'PHYSICAL'}
+                isFound={true}
+                foundBy={distRecord?.found_by}
+                onToggleFound={() => toggleClueDistribution(clue.id, false)}
+              />
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
